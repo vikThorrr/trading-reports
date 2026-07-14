@@ -1,0 +1,7 @@
+# Your encryption passphrase — never commit this.
+.publish-passphrase
+# Web Push private key — never commit this.
+.vapid.json
+# Node deps for the push sender (web-push)
+node_modules/
+.DS_Store

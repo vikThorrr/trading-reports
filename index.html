@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0e14" />
+  <title>Trading Reports</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icon-180.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Reports" />
+  <link rel="stylesheet" href="style.css?v=10" />
+</head>
+<body>
+  <!-- Lock screen: passphrase gate -->
+  <section id="lock" class="lock">
+    <div class="lock-card">
+      <div class="lock-logo">📈</div>
+      <h1>Trading Reports</h1>
+      <p class="muted">Enter your passphrase to unlock your reports.</p>
+      <form id="lock-form" autocomplete="off">
+        <input id="pass" type="password" inputmode="text" placeholder="Passphrase"
+               autocomplete="current-password" enterkeyhint="go" />
+        <label class="remember"><input type="checkbox" id="remember" /> Keep me unlocked on this device</label>
+        <button type="submit" id="unlock-btn">Unlock</button>
+        <p id="lock-error" class="error" hidden></p>
+      </form>
+    </div>
+  </section>
+
+  <!-- Main app (hidden until unlocked) -->
+  <div id="app" hidden>
+    <!-- Pull-to-refresh indicator -->
+    <div id="ptr"><span class="ptr-icon">↓</span><span class="ptr-text">Pull to refresh</span></div>
+    <!-- LIST VIEW -->
+    <section id="view-list" class="view">
+      <header class="app-header">
+        <div class="header-row">
+          <h1>Reports <span id="unread-pill" class="pill" hidden></span></h1>
+          <div class="header-actions">
+            <button id="new-analysis" class="icon-btn primary-btn" title="New analysis">＋ New</button>
+            <button id="refresh" class="icon-btn" title="Check for new reports">↻</button>
+            <button id="open-settings" class="icon-btn" title="Settings">⚙</button>
+            <button id="lock-again" class="icon-btn" title="Lock">🔒</button>
+          </div>
+        </div>
+        <div class="controls">
+          <input id="search" type="search" placeholder="Filter by ticker…" enterkeyhint="search" />
+          <select id="sort" aria-label="Sort">
+            <option value="date">Newest run</option>
+            <option value="analysis">As-of date</option>
+            <option value="ticker">Ticker A–Z</option>
+            <option value="rating">By rating</option>
+            <option value="depth">Research depth</option>
+          </select>
+        </div>
+        <div class="tabs">
+          <button id="tab-active" class="tab active">Active</button>
+          <button id="tab-archived" class="tab">Archived <span id="arch-count" class="tab-count" hidden></span></button>
+        </div>
+      </header>
+      <main id="cards" class="cards"></main>
+      <p id="empty" class="empty" hidden>No reports yet. Generate one and it'll appear here.</p>
+      <footer class="foot muted" id="foot"></footer>
+    </section>
+
+    <!-- DETAIL VIEW -->
+    <section id="view-detail" class="view" hidden>
+      <header class="app-header detail-header">
+        <button id="back" class="icon-btn" title="Back">‹ Back</button>
+        <div class="header-actions">
+          <button id="share-report" class="text-btn" title="Share">⤴ Share</button>
+          <button id="download-pdf" class="text-btn" title="Download PDF">⤓ PDF</button>
+          <button id="toggle-archive" class="text-btn"></button>
+          <button id="toggle-read" class="text-btn"></button>
+        </div>
+      </header>
+      <main id="detail" class="detail"></main>
+    </section>
+  </div>
+
+  <!-- New-analysis request modal -->
+  <div id="new-modal" class="modal" hidden>
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2>New analysis</h2>
+        <button id="new-close" class="icon-btn" title="Close">✕</button>
+      </div>
+      <form id="new-form" autocomplete="off">
+        <label class="fld">Ticker
+          <input id="na-ticker" type="text" placeholder="e.g. AAPL, NVDA, BTC-USD"
+                 autocapitalize="characters" autocorrect="off" spellcheck="false" required />
+        </label>
+        <fieldset class="fld">
+          <legend>Analysts</legend>
+          <div class="chks">
+            <label class="chk"><input type="checkbox" name="analyst" value="market" checked /> Market</label>
+            <label class="chk"><input type="checkbox" name="analyst" value="social" checked /> Sentiment</label>
+            <label class="chk"><input type="checkbox" name="analyst" value="news" checked /> News</label>
+            <label class="chk"><input type="checkbox" name="analyst" value="fundamentals" checked /> Fundamentals</label>
+          </div>
+        </fieldset>
+        <label class="fld">Research depth
+          <select id="na-depth">
+            <option value="1">Shallow — fastest</option>
+            <option value="3" selected>Medium</option>
+            <option value="5">Deep — slowest, most thorough</option>
+          </select>
+        </label>
+        <details class="na-settings">
+          <summary>GitHub connection (one-time setup)</summary>
+          <label class="fld">Repo (owner/name)
+            <input id="na-repo" type="text" placeholder="vikThorrr/trading-reports" />
+          </label>
+          <label class="fld">Access token
+            <input id="na-token" type="password" placeholder="github_pat_…" autocomplete="off" />
+          </label>
+          <p class="muted small">Stored only on this device. Create a fine-grained token with
+            <b>Contents: Read and write</b> on this one repo.</p>
+        </details>
+        <button type="submit" id="na-submit">Send to my Mac ▸</button>
+        <p id="na-status" class="na-status" hidden></p>
+      </form>
+    </div>
+  </div>
+
+  <!-- Settings modal -->
+  <div id="settings-modal" class="modal" hidden>
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2>Settings</h2>
+        <button id="settings-close" class="icon-btn" title="Close">✕</button>
+      </div>
+      <div class="settings-body">
+        <label class="setting-row">
+          <span>
+            <b>Device name</b>
+            <small class="muted">Shown on reports you trigger from here (e.g. "Victor's iPhone").</small>
+          </span>
+          <input type="text" id="set-device" class="device-input" placeholder="iPhone" maxlength="40" />
+        </label>
+
+        <label class="setting-row">
+          <span>
+            <b>Push notifications</b>
+            <small class="muted">Get alerted on your phone when a report is processing, ready, or failed.</small>
+          </span>
+          <input type="checkbox" id="set-notifs" class="switch" />
+        </label>
+        <p id="notif-status" class="na-status" hidden></p>
+
+        <label class="setting-row">
+          <span>
+            <b>Auto-archive old reports</b>
+            <small class="muted">When a new report for a ticker arrives, archive older ones for that same ticker.</small>
+          </span>
+          <input type="checkbox" id="set-autoarchive" class="switch" />
+        </label>
+
+        <div class="setting-row">
+          <span>
+            <b>Mac status</b>
+            <small class="muted" id="mac-status">Tap Ping to check if your Mac is online and ready.</small>
+          </span>
+          <button type="button" id="ping-mac" class="ghost-btn">Ping</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Share modal -->
+  <div id="share-modal" class="modal" hidden>
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2>Share report</h2>
+        <button id="share-close" class="icon-btn" title="Close">✕</button>
+      </div>
+      <div id="share-body">
+        <p class="muted small">Anyone with this link <b>and</b> the password can read this one report on a separate page — your app and other reports stay private.</p>
+        <label class="fld">Link
+          <div class="copyrow"><input id="share-link" type="text" readonly /><button type="button" class="copybtn" data-copy="share-link">Copy</button></div>
+        </label>
+        <label class="fld">Password
+          <div class="copyrow"><input id="share-pass" type="text" readonly /><button type="button" class="copybtn" data-copy="share-pass">Copy</button></div>
+        </label>
+        <button type="button" id="share-copyboth" class="primary-btn" style="width:100%">📋 Copy link + password</button>
+        <div class="share-actions">
+          <button type="button" id="share-native" class="ghost-btn">Share…</button>
+          <button type="button" id="share-rotate" class="ghost-btn">New password</button>
+          <button type="button" id="share-revoke" class="danger-btn">Revoke access</button>
+        </div>
+        <p id="share-status" class="na-status" hidden></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Print/PDF render target (hidden on screen, shown only when printing) -->
+  <div id="print-root" aria-hidden="true"></div>
+
+  <script src="app.js?v=10"></script>
+</body>
+</html>
