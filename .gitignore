@@ -5,3 +5,5 @@
 # Node deps for the push sender (web-push)
 node_modules/
 .DS_Store
+# Local preview/launch config for Claude Code — not part of the app.
+.claude/

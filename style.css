@@ -348,3 +348,56 @@ fieldset.fld legend { padding: 0; margin-bottom: 8px; }
 
   .pd-foot { margin-top: 24px; padding-top: 8px; border-top: 1px solid #d1d5db; font-size: 8pt; color: #6b7280; text-align: center; page-break-inside: avoid; }
 }
+
+/* ---------- Live run status card ----------
+   Shown above the report list while the Mac is working through a request this
+   device sent. Mirrors .card's shape so it reads as part of the same list. */
+.run-live {
+  margin: 16px 16px 0; padding: 16px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  border-left: 3px solid var(--accent);
+}
+.run-live.done { border-left-color: var(--buy); }
+.run-live.failed { border-left-color: var(--sell); }
+.run-top { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.run-kind { font-size: 12.5px; color: var(--muted); }
+.run-dismiss {
+  margin-left: auto; background: none; border: 0; color: var(--muted);
+  font-size: 15px; line-height: 1; padding: 4px 6px; cursor: pointer;
+}
+.run-label { margin: 0 0 10px; font-size: 13.5px; color: var(--text); }
+.run-live.failed .run-label { color: var(--sell); }
+.run-bar {
+  height: 6px; border-radius: 999px; background: var(--surface-2);
+  overflow: hidden;
+}
+.run-fill {
+  height: 100%; border-radius: 999px; background: var(--accent);
+  transition: width 0.4s ease;
+}
+.run-live.done .run-fill { background: var(--buy); }
+.run-live.failed .run-fill { background: var(--sell); }
+/* No step data yet (queued, or the Mac hasn't started): sweep instead of lying
+   about a percentage. */
+.run-bar.indeterminate .run-fill {
+  background: linear-gradient(90deg,
+    var(--surface-2) 0%, var(--accent) 50%, var(--surface-2) 100%);
+  background-size: 200% 100%;
+  animation: run-sweep 1.4s linear infinite;
+}
+@keyframes run-sweep {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .run-bar.indeterminate .run-fill { animation: none; }
+  .run-fill { transition: none; }
+}
+.run-meta {
+  display: flex; gap: 14px; margin-top: 10px; flex-wrap: wrap;
+  font-size: 12.5px; color: var(--muted);
+}
+.run-eta { margin-left: auto; }
+.run-stop { width: 100%; margin-top: 12px; padding: 9px 12px; font-size: 13.5px; }
+.run-stop[disabled] { opacity: 0.55; }

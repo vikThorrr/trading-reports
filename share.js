@@ -178,5 +178,5 @@ async function unlock(password) {
     btn.disabled = false; btn.textContent = "View report";
   }
 }
-$("#lock-form").addEventListener("submit", (e) => { e.preventDefault(); unlock($("#pass").value); });
+$("#lock-form").addEventListener("submit", (e) => { e.preventDefault(); unlock($("#pass").value.trim()); });
 loadShare();

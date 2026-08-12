@@ -11,7 +11,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Reports" />
-  <link rel="stylesheet" href="style.css?v=10" />
+  <link rel="stylesheet" href="style.css?v=13" />
 </head>
 <body>
   <!-- Lock screen: passphrase gate -->
@@ -61,6 +61,12 @@
           <button id="tab-archived" class="tab">Archived <span id="arch-count" class="tab-count" hidden></span></button>
         </div>
       </header>
+      <!-- Live run status: present only while the Mac is working on a request
+           this device sent. Polled from status/<stem>.json. -->
+      <!-- The live region is the .run-label line inside, not this container:
+           announcing the whole card on every poll would read the ticker, step,
+           elapsed and ETA aloud every few seconds. -->
+      <div id="run-live" class="run-live" hidden role="group" aria-label="Live analysis run"></div>
       <main id="cards" class="cards"></main>
       <p id="empty" class="empty" hidden>No reports yet. Generate one and it'll appear here.</p>
       <footer class="foot muted" id="foot"></footer>
@@ -199,6 +205,6 @@
   <!-- Print/PDF render target (hidden on screen, shown only when printing) -->
   <div id="print-root" aria-hidden="true"></div>
 
-  <script src="app.js?v=10"></script>
+  <script src="app.js?v=13"></script>
 </body>
 </html>

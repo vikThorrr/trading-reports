@@ -13,6 +13,10 @@ const LS_AUTOARCHIVE = "tr_autoarchive";
 const LS_NOTIFS = "tr_notifs";
 const LS_SHARES = "tr_shares"; // { reportId: { shareId, password } }
 const LS_DEVICE = "tr_device"; // friendly name of this device
+// The analysis this device most recently asked the Mac to run. Kept in storage
+// (not just memory) so the live progress card survives closing the PWA — an
+// iOS home-screen app gets killed aggressively while a run takes minutes.
+const LS_ACTIVE_RUN = "tr_active_run"; // { stem, ticker, analysts, depth, startedAt, repo }
 const DEFAULT_REPO = "vikThorrr/trading-reports";
 // Web Push public key (VAPID). The matching private key lives only on the Mac.
 const VAPID_PUBLIC_KEY = "BJoOhMteYJpXLvEFfJ1Gr3FWuQbdUBdOqjU6u7HueUX4VvT8LFc0Wn4k1NEI5mvlq4hX8yjk_C9z3x_l-c6_BCs";
@@ -21,10 +25,25 @@ const $ = (sel, el = document) => el.querySelector(sel);
 const state = {
   reports: [], read: new Set(), archived: new Set(),
   search: "", sort: "date", view: "active", pass: null,
+  runStatus: null,   // last status/<stem>.json we read for the active run
+  runCancelRequested: false, // a stop was sent and the Mac hasn't acked yet
+  runTimer: null,    // setInterval handle for the live-run poller
 };
 
 /* ---------------- Crypto ---------------- */
 const b64ToBuf = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+// Chunked base64: spreading a large Uint8Array into String.fromCharCode(...)
+// overflows the argument-count limit (RangeError) on big reports, so encode in
+// slices. Keep the chunk well under engine arg limits (iOS Safari is lowest).
+function bufToB64(buf) {
+  const bytes = new Uint8Array(buf);
+  let s = "";
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    s += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(s);
+}
 
 async function decryptBlob(blob, passphrase) {
   const enc = new TextEncoder();
@@ -43,7 +62,7 @@ async function decryptBlob(blob, passphrase) {
 
 /* ---------------- Markdown -> HTML ---------------- */
 function esc(s) {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 function inline(s) {
   // order matters: escape already done by caller
@@ -245,7 +264,8 @@ function renderList() {
   });
 
   const empty = $("#empty");
-  empty.hidden = items.length > 0;
+  // A run in flight is content — don't say "no reports" underneath the card.
+  empty.hidden = items.length > 0 || !($("#run-live") || {}).hidden;
   empty.textContent = state.view === "archived"
     ? "No archived reports yet."
     : "No reports yet. Generate one and it'll appear here.";
@@ -437,6 +457,7 @@ async function loadAndUnlock(passphrase, remember) {
     $("#lock").hidden = true;
     $("#app").hidden = false;
     route();
+    startRunPoller();   // resume tracking a run that was still going when we closed
   } catch (e) {
     if (e && e.message === "no-data") {
       errEl.textContent = "No reports published yet — generate one and publish, then it'll appear here.";
@@ -463,8 +484,7 @@ async function encryptForRequest(obj, passphrase) {
     bk, { name: "AES-GCM", length: 256 }, false, ["encrypt"]
   );
   const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, enc.encode(JSON.stringify(obj)));
-  const b64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
-  return { v: 1, kdf: "PBKDF2-SHA256", iterations: 210000, salt: b64(salt), iv: b64(iv), ct: b64(ct) };
+  return { v: 1, kdf: "PBKDF2-SHA256", iterations: 210000, salt: bufToB64(salt), iv: bufToB64(iv), ct: bufToB64(ct) };
 }
 
 function openNewModal() {
@@ -520,9 +540,14 @@ async function submitRequest(e) {
     });
     if (res.status === 201) {
       $("#na-ticker").value = "";
-      setStatus(`Sent — waiting for your Mac to pick up ${ticker}…`, "pending");
-      // Poll for the listener's status (confirms processing / done / failed / offline).
-      pollRequestStatus(repo, token, stem, ticker, setStatus);
+      // Track it on the list screen instead of inside this modal, so progress
+      // survives closing the modal — and the app itself.
+      setActiveRun({ stem, ticker, analysts, depth, startedAt: new Date().toISOString(), repo });
+      state.runStatus = null;
+      state.runCancelRequested = false;
+      startRunPoller();
+      setStatus(`Sent — tracking ${ticker} on your Reports screen.`, "ok");
+      setTimeout(closeNewModal, 1200);
     } else {
       const err = await res.json().catch(() => ({}));
       if (res.status === 401 || res.status === 403) setStatus("Token rejected. Check it has Contents: write on the repo.", "error");
@@ -536,47 +561,221 @@ async function submitRequest(e) {
   }
 }
 
-// Poll the status file the Mac listener writes, to confirm the request was
-// received and report its outcome (or that the Mac never responded).
-async function pollRequestStatus(repo, token, stem, ticker, setStatus) {
-  const url = `https://api.github.com/repos/${repo}/contents/status/${stem}.json`;
-  const headers = {
-    Authorization: "Bearer " + token,
-    Accept: "application/vnd.github+json",
-    "X-GitHub-Api-Version": "2022-11-28",
-  };
-  const deadline = Date.now() + 150000; // ~2.5 min to at least get "processing"
-  let sawProcessing = false;
-  while (Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, 7000));
-    let st;
-    try {
-      const res = await fetch(url + "?t=" + Date.now(), { headers, cache: "no-store" });
-      if (res.status === 404) continue; // not picked up yet
-      if (!res.ok) continue;
-      const j = await res.json();
-      st = JSON.parse(decodeURIComponent(escape(atob((j.content || "").replace(/\s/g, "")))));
-    } catch { continue; }
-    if (st.state === "processing") {
-      sawProcessing = true;
-      setStatus(`✅ Your Mac is analyzing ${ticker} now — it'll appear here in a few minutes.`, "ok");
-    } else if (st.state === "done") {
-      setStatus(`✅ ${ticker} is ready! Loading it in…`, "ok");
-      await refresh();
-      return;
-    } else if (st.state === "failed") {
-      setStatus(`⚠️ ${ticker} failed: ${st.reason || "analysis error on the Mac"}`, "error");
+/* ---------------- Live run status ----------------
+   While the Mac works through a request this device sent, the listener rewrites
+   status/<stem>.json with {state, step, total, label, elapsedSeconds,
+   etaSeconds}. We poll that and render a progress card above the report list.
+
+   The ticker is deliberately absent from that public file (the repo would
+   otherwise leak which symbols get analysed), so the card shows the ticker from
+   the copy we saved locally when the request was sent. */
+
+const RUN_POLL_MS = 10000;        // ~360 authenticated calls/hour, well under GitHub's 5000
+const RUN_STALE_MS = 90 * 60 * 1000; // after this we stop claiming an ETA
+
+function getActiveRun() {
+  try { return JSON.parse(localStorage.getItem(LS_ACTIVE_RUN) || "null"); } catch { return null; }
+}
+function setActiveRun(run) {
+  if (run) localStorage.setItem(LS_ACTIVE_RUN, JSON.stringify(run));
+  else localStorage.removeItem(LS_ACTIVE_RUN);
+}
+function fmtDuration(sec) {
+  sec = Math.max(0, Math.round(Number(sec) || 0));
+  if (sec < 60) return sec + "s";
+  const m = Math.floor(sec / 60);
+  if (m < 60) { const s = sec % 60; return s ? `${m}m ${s}s` : `${m}m`; }
+  return `${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
+function dismissRun() {
+  stopRunPoller();
+  setActiveRun(null);
+  state.runStatus = null;
+  state.runCancelRequested = false;
+  renderRunLive();
+}
+
+function renderRunLive() {
+  const el = $("#run-live");
+  if (!el) return;
+  const run = getActiveRun();
+  if (!run) { el.hidden = true; el.innerHTML = ""; return; }
+
+  const st = state.runStatus || {};
+  const started = Date.parse(run.startedAt) || Date.now();
+  const elapsed = (Date.now() - started) / 1000;
+  const stale = Date.now() - started > RUN_STALE_MS;
+
+  let kind = "processing";
+  let label;
+  let pct = null;               // null => indeterminate bar
+  let eta = "";
+
+  if (st.state === "failed") {
+    kind = "failed";
+    label = st.reason || "Analysis errored on the Mac.";
+    pct = 100;
+  } else if (st.state === "done") {
+    kind = "done";
+    label = "Report ready — loaded into your list.";
+    pct = 100;
+  } else if (!st.state) {
+    label = stale
+      ? "No response from your Mac. It's likely offline — the request stays queued and runs when it's back."
+      : "Sent — waiting for your Mac to pick it up…";
+    if (stale) kind = "failed";
+  } else {
+    label = st.label || "Analyzing…";
+    const step = Number(st.step), total = Number(st.total);
+    if (Number.isFinite(step) && Number.isFinite(total) && total > 0) {
+      pct = Math.max(0, Math.min(100, Math.round((step / total) * 100)));
+    }
+    const e = Number(st.etaSeconds);
+    if (Number.isFinite(e) && e > 0 && !stale) eta = `~${fmtDuration(e)} left`;
+    if (stale) label += " (taking longer than usual)";
+  }
+
+  const step = Number(st.step), total = Number(st.total);
+  const stepText = Number.isFinite(step) && Number.isFinite(total) && total > 0
+    ? `Step ${step} of ${total}` : "";
+
+  if (st.state === "cancelled") {
+    kind = "failed";
+    label = st.reason || "You stopped this run.";
+    pct = 100;
+  }
+  const running = kind === "processing";
+  const model = st.model || run.model || "";
+
+  el.hidden = false;
+  el.className = "run-live " + kind;
+  el.innerHTML = `
+    <div class="run-top">
+      <span class="ticker">${esc(run.ticker || "—")}</span>
+      <span class="run-kind">${st.state === "cancelled" ? "◼ Stopped" : kind === "done" ? "✅ Ready" : kind === "failed" ? "⚠️ Failed" : "⏳ Running on your Mac"}</span>
+      <button class="run-dismiss" title="Dismiss" aria-label="Dismiss">✕</button>
+    </div>
+    <p class="run-label" role="status" aria-atomic="true">${esc(label)}</p>
+    <div class="run-bar${pct === null ? " indeterminate" : ""}" role="progressbar"
+         aria-valuemin="0" aria-valuemax="100"${pct === null ? "" : ` aria-valuenow="${pct}"`}>
+      <div class="run-fill" style="width:${pct === null ? 100 : pct}%"></div>
+    </div>
+    <div class="run-meta">
+      ${stepText ? `<span>${esc(stepText)}</span>` : ""}
+      <span class="run-elapsed">⏱ ${esc(fmtDuration(elapsed))}</span>
+      ${eta ? `<span class="run-eta">${esc(eta)}</span>` : ""}
+    </div>
+    <div class="run-meta">
+      ${model ? `<span>🧠 <b>${esc(model)}</b></span>` : ""}
+      ${run.depth ? `<span>🔬 depth <b>${esc(String(run.depth))}</b></span>` : ""}
+      ${run.analysts ? `<span>👥 ${esc(String(String(run.analysts).split(",").length))} analysts</span>` : ""}
+    </div>
+    ${running ? `<button type="button" class="run-stop danger-btn">${state.runCancelRequested ? "Stopping…" : "◼ Stop this run"}</button>` : ""}`;
+  el.querySelector(".run-dismiss").onclick = dismissRun;
+  const stop = el.querySelector(".run-stop");
+  if (stop) {
+    stop.disabled = !!state.runCancelRequested;
+    stop.onclick = cancelRun;
+  }
+}
+
+/* Ask the Mac to stop the current run. The listener's progress watcher pulls
+   every cycle and kills the container when it sees this file — the main loop
+   can't do it, because it's blocked inside `docker compose run` for the whole
+   analysis. */
+async function cancelRun() {
+  const run = getActiveRun();
+  if (!run || state.runCancelRequested) return;
+  const token = localStorage.getItem(LS_GH_TOKEN);
+  const repo = run.repo || localStorage.getItem(LS_GH_REPO) || DEFAULT_REPO;
+  if (!token) return;
+  state.runCancelRequested = true;
+  renderRunLive();
+  try {
+    const res = await fetch(`https://api.github.com/repos/${repo}/contents/cancel/${run.stem}.json`, {
+      method: "PUT",
+      headers: {
+        Authorization: "Bearer " + token,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+      body: JSON.stringify({
+        message: "Cancel request",
+        content: btoa(JSON.stringify({ at: new Date().toISOString() })),
+      }),
+    });
+    if (res.status !== 201 && res.status !== 200) {
+      state.runCancelRequested = false;   // let them try again
+      renderRunLive();
+    }
+  } catch {
+    state.runCancelRequested = false;
+    renderRunLive();
+  }
+}
+
+// Cheap 1s tick so the elapsed clock moves without re-rendering (and
+// re-announcing) the whole aria-live region on every second.
+function tickRunElapsed() {
+  const run = getActiveRun();
+  const el = $("#run-live .run-elapsed");
+  if (!run || !el) return;
+  const started = Date.parse(run.startedAt) || Date.now();
+  el.textContent = "⏱ " + fmtDuration((Date.now() - started) / 1000);
+}
+
+function stopRunPoller() {
+  if (state.runTimer) { clearInterval(state.runTimer); state.runTimer = null; }
+}
+
+async function pollRunOnce() {
+  const run = getActiveRun();
+  if (!run) { stopRunPoller(); renderRunLive(); return; }
+  const token = localStorage.getItem(LS_GH_TOKEN);
+  const repo = run.repo || localStorage.getItem(LS_GH_REPO) || DEFAULT_REPO;
+  if (!token) return;                        // can't read status without a token
+  try {
+    const res = await fetch(
+      `https://api.github.com/repos/${repo}/contents/status/${run.stem}.json?t=${Date.now()}`,
+      { headers: ghHeaders(token), cache: "no-store" }
+    );
+    if (res.status === 404) { renderRunLive(); return; }  // not picked up yet
+    // Back right off on a rate limit instead of hammering into a longer block.
+    // This token is shared with shares, pushes and pings.
+    if (res.status === 403 || res.status === 429) {
+      const reset = Number(res.headers.get("x-ratelimit-reset"));
+      const retry = Number(res.headers.get("retry-after"));
+      const waitMs = retry ? retry * 1000
+        : (reset ? Math.max(0, reset * 1000 - Date.now()) : 300000);
+      stopRunPoller();
+      state.runTimer = setTimeout(startRunPoller, Math.min(waitMs + 2000, 900000));
       return;
     }
+    if (!res.ok) return;                                  // transient — keep last known
+    const j = await res.json();
+    state.runStatus = JSON.parse(decodeURIComponent(escape(atob((j.content || "").replace(/\s/g, "")))));
+  } catch { return; }
+
+  renderRunLive();
+  const st = state.runStatus || {};
+  if (st.state === "done") {
+    stopRunPoller();
+    await refresh();
+    renderRunLive();
+    // Leave the "ready" card up briefly so the transition is visible.
+    setTimeout(() => { if ((state.runStatus || {}).state === "done") dismissRun(); }, 8000);
+  } else if (st.state === "failed" || st.state === "cancelled") {
+    stopRunPoller();               // card stays until dismissed, so the reason is readable
   }
-  if (sawProcessing) {
-    setStatus(`Still analyzing ${ticker}… taking longer than usual. Tap ↻ later to check.`, "pending");
-  } else {
-    setStatus(
-      `⚠️ No response from your Mac — it's likely offline or the listener isn't running. Your request is saved and will run automatically when your Mac is back.`,
-      "error"
-    );
-  }
+}
+
+function startRunPoller() {
+  stopRunPoller();
+  renderRunLive();
+  if (!getActiveRun()) return;
+  pollRunOnce();
+  state.runTimer = setInterval(pollRunOnce, RUN_POLL_MS);
 }
 
 /* ---------------- Auto-archive ---------------- */
@@ -941,6 +1140,14 @@ function init() {
   }));
   setupPullToRefresh();
   window.addEventListener("hashchange", route);
+
+  // iOS suspends timers in a backgrounded PWA, so a run that finished while the
+  // app was closed would otherwise sit on a stale "analyzing" card. Re-poll the
+  // moment we come back to the foreground.
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && getActiveRun()) startRunPoller();
+  });
+  setInterval(tickRunElapsed, 1000);
 
   // auto-unlock if remembered
   const saved = localStorage.getItem(LS_PASS);
