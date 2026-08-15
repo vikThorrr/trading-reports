@@ -1,1 +1,1 @@
-{"state":"processing","reason":"","at":"2026-08-15T13:17:39Z","step":10,"total":12,"label":"Risk — conservative view","elapsedSeconds":5449,"etaSeconds":1089,"model":"qwen2.5:7b","cancellable":true}
+{"state":"processing","reason":"","at":"2026-08-15T13:24:13Z","step":11,"total":12,"label":"Risk — neutral view","elapsedSeconds":5843,"etaSeconds":531,"model":"qwen2.5:7b","cancellable":true}
