@@ -1,1 +1,1 @@
-{"state":"processing","reason":"","at":"2026-08-15T10:57:44Z","step":5,"total":12,"label":"Research — bull case","elapsedSeconds":10752,"etaSeconds":15052,"model":"qwen2.5:7b","cancellable":true}
+{"state":"processing","reason":"","at":"2026-08-15T11:10:19Z","step":6,"total":12,"label":"Research — bear case","elapsedSeconds":11507,"etaSeconds":11507,"model":"qwen2.5:7b","cancellable":true}
