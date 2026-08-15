@@ -1,1 +1,1 @@
-{"state":"processing","reason":"","at":"2026-08-15T11:17:04Z","step":8,"total":12,"label":"Trader — building the plan","elapsedSeconds":11912,"etaSeconds":5956,"model":"qwen2.5:7b","cancellable":true}
+{"state":"processing","reason":"","at":"2026-08-15T11:23:39Z","step":9,"total":12,"label":"Risk — aggressive view","elapsedSeconds":12307,"etaSeconds":4102,"model":"qwen2.5:7b","cancellable":true}
