@@ -1,1 +1,1 @@
-{"state":"processing","reason":"","at":"2026-08-15T12:58:08Z","step":7,"total":12,"label":"Research — manager's verdict","elapsedSeconds":4278,"etaSeconds":3055,"model":"qwen2.5:7b","cancellable":true}
+{"state":"processing","reason":"","at":"2026-08-15T12:59:03Z","step":8,"total":12,"label":"Trader — building the plan","elapsedSeconds":4333,"etaSeconds":2166,"model":"qwen2.5:7b","cancellable":true}
