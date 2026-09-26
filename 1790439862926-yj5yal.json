@@ -1,1 +1,1 @@
-{"state":"processing","reason":"","at":"2026-09-26T17:10:33Z","step":0,"total":12,"label":"Starting up","elapsedSeconds":1223,"etaSeconds":277,"model":"qwen2.5:7b","cancellable":true,"hb":5,"bytes":0,"workerCpu":"0.0","every":15}
+{"state":"failed","reason":"Analysis errored on the Mac. Check the listener log for the cause.","at":"2026-09-26T17:11:01Z","step":0,"total":0,"label":"","elapsedSeconds":0,"etaSeconds":0,"model":"qwen2.5:7b","cancellable":false,"hb":0,"bytes":0,"workerCpu":"0","every":0}
