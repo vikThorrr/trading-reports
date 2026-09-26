@@ -1,1 +1,1 @@
-{"state":"processing","reason":"","at":"2026-09-26T17:04:36Z","step":0,"total":12,"label":"Starting up","elapsedSeconds":866,"etaSeconds":634,"model":"qwen2.5:7b","cancellable":true,"hb":4,"bytes":0,"workerCpu":"51.6","every":15}
+{"state":"processing","reason":"","at":"2026-09-26T17:05:04Z","step":0,"total":12,"label":"Starting up","elapsedSeconds":894,"etaSeconds":606,"model":"qwen2.5:7b","cancellable":true,"hb":4,"bytes":0,"workerCpu":"34.9","every":15}
