@@ -11,7 +11,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Reports" />
-  <link rel="stylesheet" href="style.css?v=13" />
+  <link rel="stylesheet" href="style.css?v=15" />
 </head>
 <body>
   <!-- Lock screen: passphrase gate -->
@@ -165,6 +165,20 @@
           <input type="checkbox" id="set-autoarchive" class="switch" />
         </label>
 
+        <label class="setting-row">
+          <span>
+            <b>Progress updates</b>
+            <small class="muted">How often your Mac publishes progress while a report runs. Faster feels more live; slower is gentler on your Mac and GitHub.</small>
+          </span>
+          <select id="set-progress" class="device-input">
+            <option value="10">Every 10s</option>
+            <option value="15">Every 15s</option>
+            <option value="30">Every 30s</option>
+            <option value="60">Every 60s</option>
+            <option value="0">Off</option>
+          </select>
+        </label>
+
         <div class="setting-row">
           <span>
             <b>Mac status</b>
@@ -205,6 +219,6 @@
   <!-- Print/PDF render target (hidden on screen, shown only when printing) -->
   <div id="print-root" aria-hidden="true"></div>
 
-  <script src="app.js?v=13"></script>
+  <script src="app.js?v=15"></script>
 </body>
 </html>

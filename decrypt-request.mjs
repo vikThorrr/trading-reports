@@ -2,7 +2,7 @@
 // decrypt-request.mjs <path-to-request.json>
 // Decrypts an analysis request written by the phone app (same AES-GCM +
 // passphrase as the reports) and prints tab-separated:
-//   ticker <TAB> analysts_csv <TAB> depth <TAB> analysisDate
+//   ticker <TAB> analysts_csv <TAB> depth <TAB> analysisDate <TAB> device <TAB> progressEvery
 // so the shell listener can read it. The passphrase never leaves this machine.
 
 import { readFileSync } from "node:fs";
@@ -38,6 +38,9 @@ const analysts = Array.isArray(d.analysts) && d.analysts.length
 const depth = [1, 3, 5].includes(Number(d.depth)) ? Number(d.depth) : 3;
 const date = (d.analysisDate || "").toString().trim();
 const device = (d.device || "").toString().trim().replace(/[\t\n\r]/g, " ").slice(0, 40);
+// How often the phone wants progress published, in seconds. 0 = off. Clamped to
+// a known set so a malformed request can't make the Mac push in a tight loop.
+const every = [0, 10, 15, 20, 30, 60].includes(Number(d.progressEvery)) ? Number(d.progressEvery) : 15;
 
 if (!ticker) { process.stderr.write("no ticker in request\n"); process.exit(1); }
-process.stdout.write([ticker, analysts, depth, date, device].join("\t"));
+process.stdout.write([ticker, analysts, depth, date, device, every].join("\t"));

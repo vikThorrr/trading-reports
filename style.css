@@ -401,3 +401,7 @@ fieldset.fld legend { padding: 0; margin-bottom: 8px; }
 .run-eta { margin-left: auto; }
 .run-stop { width: 100%; margin-top: 12px; padding: 9px 12px; font-size: 13.5px; }
 .run-stop[disabled] { opacity: 0.55; }
+.run-pulse { opacity: 0.85; }
+.run-pulse .run-fresh { font-variant-numeric: tabular-nums; }
+.run-live.stalled { border-left-color: var(--hold); }
+.run-meta { font-variant-numeric: tabular-nums; }

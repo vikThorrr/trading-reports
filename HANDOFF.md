@@ -77,6 +77,15 @@ runs with no prompts and records run metadata (depth, analysts, models,
   writes so the phone can confirm receipt / outcome. **Ticker is intentionally
   omitted** so the public repo doesn't reveal what's analyzed. Pruned after 3h.
 - `status/ping.json` / `status/pong.json` — on-demand "is the Mac online" check.
+- **Branch `run-status`** — high-frequency live progress, one JSON per run at
+  the branch root (`<id>.json`). Deliberately NOT on `main`: `main` is the Pages
+  source, so a push there rebuilds the website, and a 10s cadence would blow
+  past Pages' build limit and stall real deploys (`main` was already 42
+  "Progress" commits out of 81). The listener writes it with git plumbing
+  (`hash-object`/`mktree`/`commit-tree`), so the index and working tree are
+  never touched — `status/<id>.json` is tracked on `main`, and rewriting it in
+  place without committing would leave the tree dirty, which silently jams the
+  listener. Commits chain fast-forward; nothing is force-pushed.
 - `cancel/<id>.json` — the phone asking to stop a run in flight. Only the
   listener's **progress watcher** looks for it: the main loop is blocked inside
   `docker compose run` for the whole analysis, so nothing else is pulling. The
@@ -106,6 +115,27 @@ runs with no prompts and records run metadata (depth, analysts, models,
   time, an ETA, the model in use, and a **Stop this run** button. It is stored
   in `tr_active_run`, so it survives force-quitting the PWA, and resumes polling
   on unlock and on returning to the foreground.
+
+### Update cadence (Settings → Progress updates)
+
+The phone chooses how often the Mac publishes: 10/15/30/60s, or Off. It travels
+in the encrypted request as `progressEvery`, becomes the 6th tab-separated field
+out of `decrypt-request.mjs`, and sets `watch_progress`'s sleep. `0` skips the
+watcher entirely. The app polls at the same cadence — polling faster than the
+Mac publishes just burns API quota for identical bytes.
+
+Each tick also carries liveness, because between stage boundaries a healthy run
+can sit inside a single LLM call for minutes with nothing on disk changing:
+
+- `hb` — lines in `message_tool.log` (one per agent message and per tool call).
+- `bytes` — total bytes of section files written so far.
+- `workerCpu` — %CPU of **`llama-server`**, the model runner. Not the container:
+  Ollama runs on the host, so the container sits near 0% while the LLM works,
+  and `docker stats` costs ~2s per call besides.
+
+The card shows "updated Ns ago" and flips to a stall warning past 4x the
+cadence, so a slow run is distinguishable from a wedged one. The ETA counts
+down locally between publishes instead of freezing on the last published value.
 
 ### How live progress is derived (non-obvious)
 
@@ -139,7 +169,7 @@ repos).
 - Publish manually: `node publish.mjs` (needs Node 22 + the local passphrase).
 - **Cache busting:** bump `?v=N` on `app.js`/`style.css` in `index.html` +
   `share.html`, and the `CACHE` name in `sw.js`, on every frontend change
-  (currently **v13 / tr-v13**).
+  (currently **v15 / tr-v15**).
 - After editing `listen.sh`, reload it:
   `launchctl kickstart -k gui/$(id -u)/com.victor.tradingagents-listen`.
 
@@ -156,6 +186,11 @@ repos).
 - `TRADINGAGENTS_MAX_DEBATE_ROUNDS` / `MAX_RISK_ROUNDS` are pinned to 1 in
   `.env`, so the phone's **research depth selector does not currently change
   debate length** — it only labels the report. Unpin those to make depth real.
+- **Never edit `listen.sh` in place while it is running.** Bash reads a script
+  incrementally by byte offset, so rewriting the same inode makes a running
+  listener resume at the wrong position. Edit a copy and `mv` it over (that
+  swaps the inode, and the running shell keeps reading the old one), or stop the
+  listener first.
 - Runs are strictly **serial**: the listener's loop calls `run_one` per request
   and each blocks. See the concurrency note below.
 - Possible next: "download all as one PDF", grouping by ticker, richer Mac

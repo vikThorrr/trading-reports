@@ -16,6 +16,10 @@ const LS_DEVICE = "tr_device"; // friendly name of this device
 // The analysis this device most recently asked the Mac to run. Kept in storage
 // (not just memory) so the live progress card survives closing the PWA — an
 // iOS home-screen app gets killed aggressively while a run takes minutes.
+// How often the Mac should publish progress during a run, in seconds (0 = off).
+// Sent with each request so the Mac knows the cadence this device wants.
+const LS_PROGRESS_EVERY = "tr_progress_every";
+const DEFAULT_PROGRESS_EVERY = 10;
 const LS_ACTIVE_RUN = "tr_active_run"; // { stem, ticker, analysts, depth, startedAt, repo }
 const DEFAULT_REPO = "vikThorrr/trading-reports";
 // Web Push public key (VAPID). The matching private key lives only on the Mac.
@@ -25,7 +29,8 @@ const $ = (sel, el = document) => el.querySelector(sel);
 const state = {
   reports: [], read: new Set(), archived: new Set(),
   search: "", sort: "date", view: "active", pass: null,
-  runStatus: null,   // last status/<stem>.json we read for the active run
+  runStatus: null,   // last status we read for the active run
+  runStatusAt: 0,    // when it arrived, so elapsed/ETA stay smooth between polls
   runCancelRequested: false, // a stop was sent and the Mac hasn't acked yet
   runTimer: null,    // setInterval handle for the live-run poller
 };
@@ -524,7 +529,8 @@ async function submitRequest(e) {
   submit.disabled = true;
   setStatus("Sending…");
   try {
-    const payload = { ticker, analysts, depth, device: deviceName(), analysisDate: "", requestedAt: new Date().toISOString() };
+    const payload = { ticker, analysts, depth, device: deviceName(), analysisDate: "",
+                      progressEvery: progressEvery(), requestedAt: new Date().toISOString() };
     const blob = await encryptForRequest(payload, state.pass);
     const stem = Date.now() + "-" + Math.random().toString(36).slice(2, 8);
     const path = "requests/" + stem + ".json";
@@ -573,6 +579,17 @@ async function submitRequest(e) {
 const RUN_POLL_MS = 10000;        // ~360 authenticated calls/hour, well under GitHub's 5000
 const RUN_STALE_MS = 90 * 60 * 1000; // after this we stop claiming an ETA
 
+function progressEvery() {
+  // Check for "unset" BEFORE coercing: getItem returns null when the user has
+  // never touched this, Number(null) is 0, and 0 is a legitimate value meaning
+  // "off" — so coercing first would silently disable progress for everyone who
+  // never opened Settings.
+  const raw = localStorage.getItem(LS_PROGRESS_EVERY);
+  if (raw === null || raw === "") return DEFAULT_PROGRESS_EVERY;
+  const v = Number(raw);
+  return [0, 10, 15, 30, 60].includes(v) ? v : DEFAULT_PROGRESS_EVERY;
+}
+
 function getActiveRun() {
   try { return JSON.parse(localStorage.getItem(LS_ACTIVE_RUN) || "null"); } catch { return null; }
 }
@@ -592,6 +609,7 @@ function dismissRun() {
   stopRunPoller();
   setActiveRun(null);
   state.runStatus = null;
+  state.runStatusAt = 0;
   state.runCancelRequested = false;
   renderRunLive();
 }
@@ -631,8 +649,13 @@ function renderRunLive() {
     if (Number.isFinite(step) && Number.isFinite(total) && total > 0) {
       pct = Math.max(0, Math.min(100, Math.round((step / total) * 100)));
     }
+    // Tick the ETA down between publishes rather than showing a value frozen
+    // at whatever it was when the Mac last spoke.
     const e = Number(st.etaSeconds);
-    if (Number.isFinite(e) && e > 0 && !stale) eta = `~${fmtDuration(e)} left`;
+    const aged = state.runStatusAt ? (Date.now() - state.runStatusAt) / 1000 : 0;
+    const remain = Number.isFinite(e) ? e - aged : NaN;
+    if (Number.isFinite(remain) && remain > 0 && !stale) eta = `~${fmtDuration(remain)} left`;
+    else if (Number.isFinite(e) && e > 0 && !stale) eta = "finishing up…";
     if (stale) label += " (taking longer than usual)";
   }
 
@@ -646,6 +669,18 @@ function renderRunLive() {
     pct = 100;
   }
   const running = kind === "processing";
+  // How stale the last publish is. This is the difference between "slow but
+  // working" and "wedged" — without it a healthy run that sits inside one long
+  // LLM call is indistinguishable from a dead one.
+  const every = Number(st.every) || progressEvery() || 15;
+  const sinceUpdate = state.runStatusAt ? (Date.now() - state.runStatusAt) / 1000 : null;
+  const stalled = sinceUpdate !== null && sinceUpdate > Math.max(90, every * 4);
+  const freshText = sinceUpdate === null
+    ? "waiting for first update…"
+    : stalled ? `⚠️ no update for ${fmtDuration(sinceUpdate)}`
+              : `⚡ updated ${fmtDuration(sinceUpdate)} ago`;
+  const hb = Number(st.hb) > 0 ? Number(st.hb) : 0;
+  const cpu = st.workerCpu && Number(st.workerCpu) > 1 ? String(st.workerCpu) : "";
   const model = st.model || run.model || "";
 
   el.hidden = false;
@@ -671,6 +706,11 @@ function renderRunLive() {
       ${run.depth ? `<span>🔬 depth <b>${esc(String(run.depth))}</b></span>` : ""}
       ${run.analysts ? `<span>👥 ${esc(String(String(run.analysts).split(",").length))} analysts</span>` : ""}
     </div>
+    ${running ? `<div class="run-meta run-pulse">
+      <span class="run-fresh">${esc(freshText)}</span>
+      ${hb ? `<span>💬 ${esc(String(hb))} msgs</span>` : ""}
+      ${cpu ? `<span>⚙️ ${esc(cpu)}% model</span>` : ""}
+    </div>` : ""}
     ${running ? `<button type="button" class="run-stop danger-btn">${state.runCancelRequested ? "Stopping…" : "◼ Stop this run"}</button>` : ""}`;
   el.querySelector(".run-dismiss").onclick = dismissRun;
   const stop = el.querySelector(".run-stop");
@@ -719,10 +759,33 @@ async function cancelRun() {
 // re-announcing) the whole aria-live region on every second.
 function tickRunElapsed() {
   const run = getActiveRun();
-  const el = $("#run-live .run-elapsed");
-  if (!run || !el) return;
+  if (!run || $("#run-live").hidden) return;
   const started = Date.parse(run.startedAt) || Date.now();
-  el.textContent = "⏱ " + fmtDuration((Date.now() - started) / 1000);
+  const el = $("#run-live .run-elapsed");
+  if (el) el.textContent = "⏱ " + fmtDuration((Date.now() - started) / 1000);
+
+  // Keep the freshness line and the ETA moving every second, so the card is
+  // visibly alive between publishes instead of looking frozen for a full cycle.
+  const st = state.runStatus || {};
+  if (!state.runStatusAt) return;
+  const since = (Date.now() - state.runStatusAt) / 1000;
+  const every = Number(st.every) || progressEvery() || 15;
+  const stalled = since > Math.max(90, every * 4);
+
+  const fresh = $("#run-live .run-fresh");
+  if (fresh) {
+    fresh.textContent = stalled
+      ? `⚠️ no update for ${fmtDuration(since)}`
+      : `⚡ updated ${fmtDuration(since)} ago`;
+  }
+  $("#run-live").classList.toggle("stalled", stalled && st.state === "processing");
+
+  const etaEl = $("#run-live .run-eta");
+  if (etaEl) {
+    const remain = Number(st.etaSeconds) - since;
+    etaEl.textContent = Number.isFinite(remain) && remain > 0
+      ? `~${fmtDuration(remain)} left` : "finishing up…";
+  }
 }
 
 function stopRunPoller() {
@@ -737,7 +800,7 @@ async function pollRunOnce() {
   if (!token) return;                        // can't read status without a token
   try {
     const res = await fetch(
-      `https://api.github.com/repos/${repo}/contents/status/${run.stem}.json?t=${Date.now()}`,
+      `https://api.github.com/repos/${repo}/contents/${run.stem}.json?ref=run-status&t=${Date.now()}`,
       { headers: ghHeaders(token), cache: "no-store" }
     );
     if (res.status === 404) { renderRunLive(); return; }  // not picked up yet
@@ -755,6 +818,7 @@ async function pollRunOnce() {
     if (!res.ok) return;                                  // transient — keep last known
     const j = await res.json();
     state.runStatus = JSON.parse(decodeURIComponent(escape(atob((j.content || "").replace(/\s/g, "")))));
+    state.runStatusAt = Date.now();
   } catch { return; }
 
   renderRunLive();
@@ -775,7 +839,10 @@ function startRunPoller() {
   renderRunLive();
   if (!getActiveRun()) return;
   pollRunOnce();
-  state.runTimer = setInterval(pollRunOnce, RUN_POLL_MS);
+  // Match the Mac's publish cadence — polling faster than it publishes just
+  // burns GitHub API quota for identical bytes.
+  const every = progressEvery();
+  state.runTimer = setInterval(pollRunOnce, Math.max(5, every || 15) * 1000);
 }
 
 /* ---------------- Auto-archive ---------------- */
@@ -801,6 +868,7 @@ function applyAutoArchive() {
 /* ---------------- Settings ---------------- */
 function openSettings() {
   $("#set-device").value = localStorage.getItem(LS_DEVICE) || guessDeviceName();
+  $("#set-progress").value = String(progressEvery());
   $("#set-autoarchive").checked = localStorage.getItem(LS_AUTOARCHIVE) === "1";
   const notifOn = localStorage.getItem(LS_NOTIFS) === "1" &&
     typeof Notification !== "undefined" && Notification.permission === "granted";
@@ -1124,6 +1192,10 @@ function init() {
   $("#set-autoarchive").addEventListener("change", onToggleAutoArchive);
   $("#set-notifs").addEventListener("change", onToggleNotifs);
   $("#set-device").addEventListener("input", (e) => localStorage.setItem(LS_DEVICE, e.target.value.trim()));
+  $("#set-progress").addEventListener("change", (e) => {
+    localStorage.setItem(LS_PROGRESS_EVERY, String(Number(e.target.value)));
+    if (getActiveRun()) startRunPoller();   // re-poll at the new cadence
+  });
   $("#ping-mac").addEventListener("click", pingMac);
   // Share modal
   $("#share-close").addEventListener("click", () => ($("#share-modal").hidden = true));
