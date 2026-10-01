@@ -3,15 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#0b0e14" />
+  <meta name="theme-color" content="#f7f4ec" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#17160f" media="(prefers-color-scheme: dark)" />
   <title>Trading Reports</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="icon-180.png" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Reports" />
-  <link rel="stylesheet" href="style.css?v=15" />
+  <link rel="stylesheet" href="style.css?v=16" />
 </head>
 <body>
   <!-- Lock screen: passphrase gate -->
@@ -82,7 +83,10 @@
           <button id="toggle-archive" class="text-btn"></button>
           <button id="toggle-read" class="text-btn"></button>
         </div>
+        <!-- Report pages: monogram, section tabs, N/M counter (dashboard.js) -->
+        <nav id="dash-nav" class="dash-nav" aria-label="Report pages" hidden></nav>
       </header>
+      <p id="dash-live" class="sr-only" role="status"></p>
       <main id="detail" class="detail"></main>
     </section>
   </div>
@@ -219,6 +223,7 @@
   <!-- Print/PDF render target (hidden on screen, shown only when printing) -->
   <div id="print-root" aria-hidden="true"></div>
 
-  <script src="app.js?v=15"></script>
+  <script src="dashboard.js?v=16"></script>
+  <script src="app.js?v=16"></script>
 </body>
 </html>

@@ -7,3 +7,5 @@ node_modules/
 .DS_Store
 # Local preview/launch config for Claude Code — not part of the app.
 .claude/
+# Local hand-off prompt for the TradingAgents session — not part of the app.
+REDESIGN-WS1-PROMPT.txt

@@ -51,6 +51,9 @@ Phone PWA ──(GitHub Contents API, encrypted)──► repo ──(git pull)�
 | File | Role |
 |---|---|
 | `index.html` / `app.js` / `style.css` | The main PWA (reader + remote). |
+| `dashboard.js` | Report detail view: a paged, card-style dashboard (14 pages max) rendered from each report's optional `dashboard` object. Page registry + inline-SVG charts, no dependencies. |
+| `REDESIGN.md` | The dashboard plan and the **frozen `dashboard.json` schema 1** both sides build against. Read before touching either. |
+| `fixtures/dashboard.msft.json` | Hand-written schema-1 test fixture (MSFT, from the design mockups). Not analysis. |
 | `sw.js` | Service worker: offline cache + Web-Push `push`/`notificationclick`. |
 | `share.html` / `share.js` | Standalone guest viewer for one shared report (isolated; own crypto+renderer). |
 | `publish.mjs` | Mac: scan `~/Downloads/TradingAgents Reports/`, encrypt → `reports.enc.json`, commit+push. Skips incomplete runs. |
@@ -116,6 +119,33 @@ runs with no prompts and records run metadata (depth, analysts, models,
   in `tr_active_run`, so it survives force-quitting the PWA, and resumes polling
   on unlock and on returning to the foreground.
 
+### Report dashboard (v16)
+
+The detail view is a pager: Summary → Business (Overview, Customers, Financial
+overview, Business quality) → Phase → Moat → Growth → Management → Risks →
+Valuation → Verdict → Bull vs bear → Full report. URL is `#/r/<id>/<page>`;
+page turns use `location.replace`, so "‹ Back" returns to the list instead of
+walking back through every page. Swipe and ←/→ also turn pages.
+
+Data comes from `dashboard.json`, which the TradingAgents run writes next to
+`run_metadata.json` and `publish.mjs` attaches to the report entry (schema 1
+only; a malformed file is skipped with a warning and never blocks publishing).
+**Every field is optional.** Missing values render "—", a page with no data
+drops out of the nav (the N/M counter counts only real pages), and a page that
+throws while drawing shows a notice instead of blanking the view — the
+narrative half of the data is written by a local 7B model, so the renderer
+type-checks everything. Reports without a dashboard (all pre-v16 ones) show
+Summary / Verdict / Full report.
+
+Segment and geography splits have no API source on the egress allowlist; when
+present they're LLM-estimated and tagged `"source": "llm"`, which renders an
+"approx." chip. 5/10-year growth and peer ROIC need an Alpha Vantage key in
+`TradingAgents/.env` — without one they're null and those rows hide.
+
+Theme: cream/green light default, warm dark mode, all colours as tokens at the
+top of `style.css`. `--accent-deep` is a text/stroke colour and is overridden
+lighter in dark mode — keep it that way or monograms and icons vanish.
+
 ### Update cadence (Settings → Progress updates)
 
 The phone chooses how often the Mac publishes: 10/15/30/60s, or Off. It travels
@@ -169,7 +199,7 @@ repos).
 - Publish manually: `node publish.mjs` (needs Node 22 + the local passphrase).
 - **Cache busting:** bump `?v=N` on `app.js`/`style.css` in `index.html` +
   `share.html`, and the `CACHE` name in `sw.js`, on every frontend change
-  (currently **v15 / tr-v15**).
+  (currently **v16 / tr-v16**).
 - After editing `listen.sh`, reload it:
   `launchctl kickstart -k gui/$(id -u)/com.victor.tradingagents-listen`.
 

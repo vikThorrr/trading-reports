@@ -33,6 +33,8 @@ const state = {
   runStatusAt: 0,    // when it arrived, so elapsed/ETA stay smooth between polls
   runCancelRequested: false, // a stop was sent and the Mac hasn't acked yet
   runTimer: null,    // setInterval handle for the live-run poller
+  detailId: null,    // report open in the detail view
+  detailSlug: null,  // its dashboard page
 };
 
 /* ---------------- Crypto ---------------- */
@@ -284,47 +286,76 @@ function renderList() {
   $("#foot").textContent = `${items.length} ${state.view === "archived" ? "archived" : "report" + (items.length === 1 ? "" : "s")}`;
 }
 
-function renderDetail(id) {
+function renderDetail(id, slug) {
   const r = state.reports.find((x) => x.id === id);
   if (!r) { location.hash = "#/"; return; }
-  const rc = ratingClass(r.rating);
-  const sections = splitSections(r.md);
-  const params = [
-    ["Triggered from", sourceDisplay(r)],
-    ["Generated", r.date ? fmtDate(r.date) : null],
-    ["As-of date", r.analysisDate],
-    ["Research depth", r.depth],
-    ["Analysts", r.analysts ? r.analysts.join(", ") : null],
-    ["Model", r.model ? r.model + (r.provider ? ` (${r.provider})` : "") : null],
-    ["Effort", r.effort],
-    ["Price target", r.priceTarget],
-    ["Time horizon", r.timeHorizon],
-    ["Language", r.language],
-  ].filter(([, v]) => v);
+  const view = Dashboard.render(r, slug);
+  const turned = state.detailId !== id || state.detailSlug !== view.slug;
+  state.detailId = id;
+  state.detailSlug = view.slug;
 
-  const detail = $("#detail");
-  detail.innerHTML = `
-    <h1 class="report-title">${esc(r.ticker)}</h1>
-    <div class="report-meta">
-      <span class="badge ${rc}">${esc(r.rating || "—")}</span>
-      <span>${fmtDate(r.date)}</span>
-    </div>
-    <dl class="params">
-      ${params.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(String(v))}</dd></div>`).join("")}
-    </dl>
-    ${sections.map((s, idx) => `
-      <details class="section" ${idx === sections.length - 1 ? "open" : ""}>
-        <summary>${esc(s.title)}</summary>
-        <div class="section-body md">${s.html}</div>
-      </details>`).join("")}`;
-  window.scrollTo(0, 0);
+  const nav = $("#dash-nav");
+  nav.innerHTML = view.nav;
+  nav.hidden = false;
+  $("#detail").innerHTML = view.html;
+  if (turned) {
+    window.scrollTo(0, 0);
+    $("#dash-live").textContent = `Page ${view.index + 1} of ${view.total}: ${view.title}`;
+    const on = nav.querySelector(".dn-tab.on");
+    if (on) on.scrollIntoView({ block: "nearest", inline: "center" });
+  }
 
-  // mark read
   markRead(id, true);
   updateToggleReadBtn(id);
   updateToggleArchiveBtn(id);
   $("#download-pdf").onclick = () => downloadPdf(id);
   $("#share-report").onclick = () => openShareModal(id);
+}
+
+// Page turns REPLACE the history entry instead of pushing one, so "‹ Back"
+// returns to the list rather than walking back through every page viewed.
+function goPage(slug) {
+  if (!state.detailId || !slug) return;
+  location.replace("#/r/" + encodeURIComponent(state.detailId) + "/" + slug);
+}
+
+function stepPage(dir) {
+  const r = state.reports.find((x) => x.id === state.detailId);
+  if (!r) return;
+  goPage(Dashboard.neighbor(r, state.detailSlug, dir));
+}
+
+function setupPager() {
+  // Tabs, monogram, contents list and prev/next all carry data-go.
+  $("#view-detail").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-go]");
+    if (b) { e.preventDefault(); goPage(b.dataset.go); }
+  });
+
+  // Horizontal swipe on the page turns it. Ignore gestures that start in
+  // something that scrolls sideways itself, and anything slow or mostly
+  // vertical (that's the user scrolling the page).
+  const el = $("#detail");
+  let sx = 0, sy = 0, st = 0, skip = true;
+  el.addEventListener("touchstart", (e) => {
+    skip = e.touches.length !== 1 || !!e.target.closest(".table-wrap, pre, .dn-tabs");
+    const t = e.touches[0];
+    sx = t.clientX; sy = t.clientY; st = Date.now();
+  }, { passive: true });
+  el.addEventListener("touchend", (e) => {
+    if (skip) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - sx, dy = t.clientY - sy;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.6 && Date.now() - st < 700) stepPage(dx < 0 ? 1 : -1);
+  }, { passive: true });
+
+  document.addEventListener("keydown", (e) => {
+    if ($("#view-detail").hidden || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.target.closest && e.target.closest("input, textarea, select")) return;
+    if (document.querySelector(".modal:not([hidden])")) return;
+    if (e.key === "ArrowRight") stepPage(1);
+    else if (e.key === "ArrowLeft") stepPage(-1);
+  });
 }
 
 function updateToggleReadBtn(id) {
@@ -430,12 +461,16 @@ function setView(view) {
 /* ---------------- Routing ---------------- */
 function route() {
   const hash = location.hash;
-  const m = hash.match(/^#\/r\/(.+)$/);
+  // #/r/<report id>[/<page slug>] — the page lives in the hash so reload and
+  // the back button land on the same dashboard page.
+  const m = hash.match(/^#\/r\/([^/]+)(?:\/([\w-]+))?$/);
   if (m) {
     $("#view-list").hidden = true;
     $("#view-detail").hidden = false;
-    renderDetail(decodeURIComponent(m[1]));
+    renderDetail(decodeURIComponent(m[1]), m[2] || null);
   } else {
+    state.detailId = null;
+    state.detailSlug = null;
     $("#view-detail").hidden = true;
     $("#view-list").hidden = false;
     renderList();
@@ -1211,6 +1246,7 @@ function init() {
     const t = b.textContent; b.textContent = "Copied"; setTimeout(() => (b.textContent = t), 1200);
   }));
   setupPullToRefresh();
+  setupPager();
   window.addEventListener("hashchange", route);
 
   // iOS suspends timers in a backgrounded PWA, so a run that finished while the

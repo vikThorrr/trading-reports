@@ -1,0 +1,127 @@
+{
+  "schema": 1,
+  "ticker": "MSFT",
+  "as_of": "2026-10-02",
+  "currency": "USD",
+  "sources": { "quant": ["fixture"], "qual": "fixture — hand-written test data from the design mockups, not analysis" },
+
+  "snapshot": {
+    "company_name": "Microsoft",
+    "exchange": "NASDAQ",
+    "price": 517.3,
+    "market_cap": 3850000000000,
+    "one_liner": "Software and computing infrastructure that businesses, governments, and individuals run on."
+  },
+
+  "overview": {
+    "mission": "To empower every person and every organization on the planet to achieve more.",
+    "what_it_does": "Microsoft builds the software and computing infrastructure that businesses, governments, and individuals run on.",
+    "how_it_makes_money": "Most of the money now arrives as subscriptions and consumption contracts rather than one-time license sales, so a customer keeps paying while they keep using the product.",
+    "segments": {
+      "source": "llm",
+      "fiscal_label": "FY26",
+      "total_revenue": 332000000000,
+      "rows": [
+        { "name": "Server Products and Cloud Services", "revenue": 129000000000, "yoy_pct": 31 },
+        { "name": "Microsoft 365 Commercial Products and Cloud Services", "revenue": 102000000000, "yoy_pct": 16 },
+        { "name": "Gaming", "revenue": 21800000000, "yoy_pct": -7 },
+        { "name": "LinkedIn", "revenue": 19800000000, "yoy_pct": 11 },
+        { "name": "Search and News Advertising", "revenue": 15300000000, "yoy_pct": 9 },
+        { "name": "Windows and Devices", "revenue": 17400000000, "yoy_pct": 2 },
+        { "name": "Dynamics", "revenue": 8600000000, "yoy_pct": 14 },
+        { "name": "Enterprise and Partner Services", "revenue": 7600000000, "yoy_pct": -1 }
+      ]
+    }
+  },
+
+  "customers": {
+    "who": "Large enterprises and government bodies carry the business: they rent Azure capacity to run their systems and buy Microsoft 365 seats for their staff.",
+    "why": "Enterprises choose Azure over Amazon Web Services and Google Cloud largely on fit, since the servers, databases, and tools their teams use come from the same supplier.",
+    "geography": {
+      "source": "llm",
+      "regions": [
+        { "name": "United States", "pct": 51, "iso": ["US"] },
+        { "name": "Rest of World", "pct": 49, "iso": [] }
+      ]
+    }
+  },
+
+  "financials": {
+    "margins":   { "gross_pct": 67.9, "operating_pct": 46.8, "net_pct": 40.3, "fcf_pct": 20.2 },
+    "health":    { "cash": 76800000000, "total_debt": 56800000000, "debt_to_equity": 0.13, "ebit_interest_cover": null },
+    "growth":    { "revenue_cagr": { "y3": 16.1, "y5": 14.6, "y10": 13.8 },
+                   "eps_cagr":     { "y3": 22.9, "y5": 17.4, "y10": 21.5 },
+                   "fcf_cagr":     { "y3": 4.0,  "y5": 3.6,  "y10": 10.4 } },
+    "valuation": { "ps": 11.5, "pe": 28.6, "pb": 8.6, "pfcf": 56.9 },
+    "returns":   { "dividend_yield_pct": 0.7, "buyback_yield_pct": 0.5, "debt_paydown_yield_pct": 0.1, "total_yield_pct": 1.3 }
+  },
+
+  "quality": {
+    "predictable_revenue":  { "verdict": 2, "note": "Roughly 70% of revenue comes from cloud consumption and per-seat subscriptions that renew without a fresh buying decision, and revenue rose in each of the last seven quarters." },
+    "pricing_power":        { "verdict": 2, "note": "Operating margin edged up to 45.1% in the June quarter while revenue grew 17.7%, and a paid AI tier was added on top of subscriptions customers already had." },
+    "recession_proof":      { "verdict": 2, "note": "The two biggest lines are cloud infrastructure and workplace software that businesses must run to operate, and advertising, the first budget cut in a downturn, is only 4.6% of revenue." },
+    "competitive_position": { "verdict": 2, "note": "Return on invested capital of 25.3% is roughly double the 12.6% median of its comparison group, and it holds a category-defining position in both segments that drive revenue." },
+    "roic_pct": 25.3,
+    "peer_roic_median_pct": 12.6
+  },
+
+  "phase": {
+    "revenue_growing":   { "answer": false, "note": "+0% in the last year" },
+    "profitable":        { "answer": true,  "note": "$183B operating cash flow" },
+    "returning_capital": { "answer": true,  "note": "buybacks and dividends" },
+    "profit_metric": { "key": "ocf", "label": "Operating Cash Flow", "why": "best signal for asset-light" },
+    "history": {
+      "labels":  ["FY22", "FY23", "FY24", "FY25", "FY26", "LTM"],
+      "revenue": [198000000000, 212000000000, 245000000000, 282000000000, 332000000000, 332000000000],
+      "profit":  [89000000000, 87600000000, 119000000000, 136000000000, 183000000000, 183000000000]
+    },
+    "stage": 4,
+    "stage_note": "Profitable, still growing, and returning capital through dividends and buybacks."
+  },
+
+  "moat": {
+    "rating": 2,
+    "drivers": [
+      { "name": "Switching costs", "note": "Identity, email, files and line-of-business apps are wired together; moving one piece means re-plumbing the rest." },
+      { "name": "Distribution", "note": "Hundreds of millions of existing commercial seats give every new product, like the AI tier, a built-in sales channel." },
+      { "name": "Scale", "note": "Datacenter build-out at this size spreads fixed cost across more customers than almost any rival can." }
+    ],
+    "note": "The moat is the bundle: each product makes the others harder to leave."
+  },
+
+  "growth": {
+    "drivers": [
+      { "name": "Azure AI consumption", "note": "Model hosting and inference is the fastest-growing slice of cloud spend." },
+      { "name": "Paid AI seats", "note": "An add-on priced on top of existing Microsoft 365 subscriptions." },
+      { "name": "Security", "note": "Sold into the same enterprise accounts, raising revenue per customer." }
+    ],
+    "note": "Growth now leans on AI attach to an installed base rather than on winning new logos."
+  },
+
+  "management": {
+    "ceo": "Satya Nadella",
+    "ceo_since": 2014,
+    "note": "Led the pivot from Windows licensing to cloud subscriptions.",
+    "capital_allocation_note": "Heavy datacenter capex alongside a steadily rising dividend and ongoing buybacks."
+  },
+
+  "risks": [
+    { "name": "AI capex payback", "severity": 3, "note": "Datacenter spending is running ahead of the revenue it is meant to earn; a slower AI uptake would compress free cash flow." },
+    { "name": "Antitrust pressure", "severity": 2, "note": "Bundling of Teams and cloud licensing terms are under regulator review in the EU and US." },
+    { "name": "Cloud price competition", "severity": 2, "note": "Amazon and Google can cut compute prices to win AI workloads." },
+    { "name": "Gaming weakness", "severity": 1, "note": "Gaming revenue fell 7% and the segment is small enough not to move the whole." }
+  ],
+
+  "bull_bear": {
+    "bull_points": [
+      "Recurring revenue base that renews without a fresh buying decision",
+      "AI tier monetises the existing seat base at high incremental margin",
+      "ROIC roughly double the peer median"
+    ],
+    "bear_points": [
+      "Price / free cash flow of 56.9x leaves little room for disappointment",
+      "Free cash flow growth (+4% 3-yr) lags earnings growth because of capex",
+      "Regulatory pressure on bundling"
+    ]
+  }
+}

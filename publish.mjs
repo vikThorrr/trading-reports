@@ -104,6 +104,23 @@ function collectReports() {
       try { rm = JSON.parse(readFileSync(rmPath, "utf8")); } catch { rm = {}; }
     }
 
+    // Structured dashboard data (schema 1, see REDESIGN.md §2), written by the
+    // TradingAgents run next to run_metadata.json. Optional: older reports and
+    // runs where emission failed simply don't have it, and the app falls back
+    // to the cover / verdict / full-report pages. A malformed file must never
+    // block publishing the report itself.
+    let dashboard = null;
+    const dbPath = join(dir, "dashboard.json");
+    if (existsSync(dbPath)) {
+      try {
+        const d = JSON.parse(readFileSync(dbPath, "utf8"));
+        if (d && d.schema === 1) dashboard = d;
+        else console.warn(`  ! ${name}: dashboard.json has unsupported schema ${d && d.schema} — skipped`);
+      } catch (e) {
+        console.warn(`  ! ${name}: dashboard.json unreadable (${e.message}) — skipped`);
+      }
+    }
+
     reports.push({
       id: name,
       ticker: meta.ticker,
@@ -122,6 +139,7 @@ function collectReports() {
       language: rm.language || null,
       source: rm.source || null, // "phone" or "mac"
       sourceDevice: rm.source_device || null, // e.g. "Victor's iPhone"
+      dashboard,
       md,
     });
   }
