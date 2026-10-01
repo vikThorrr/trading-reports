@@ -1,12 +1,12 @@
 /* Service worker: cache the app shell + encrypted data so reports are
    readable offline (e.g. on the subway). Bump CACHE to force an update. */
-const CACHE = "tr-v16";
+const CACHE = "tr-v17";
 const SHELL = [
   "./",
   "index.html",
-  "style.css?v=16",
-  "dashboard.js?v=16",
-  "app.js?v=16",
+  "style.css?v=17",
+  "dashboard.js?v=17",
+  "app.js?v=17",
   "manifest.webmanifest",
   "icon.svg",
 ];

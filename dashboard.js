@@ -99,8 +99,12 @@ const Dashboard = (() => {
   }
   const monogram = (r) => String(r.ticker || "?").slice(0, 4).toUpperCase();
   function infoCard(icon, label, text) {
-    return `<div class="db-card db-info"><span class="db-ico" aria-hidden="true">${ICON[icon]}</span>
-      <div><div class="db-eyebrow">${esc(label)}</div><p class="db-lead">${esc(text)}</p></div></div>`;
+    // Real runs leave some notes null; then the label is the title, rather
+    // than a small eyebrow sitting over an empty paragraph.
+    const body = text
+      ? `<div class="db-eyebrow">${esc(label)}</div><p class="db-lead">${esc(text)}</p>`
+      : `<p class="db-lead"><b>${esc(label)}</b></p>`;
+    return `<div class="db-card db-info"><span class="db-ico" aria-hidden="true">${ICON[icon]}</span><div>${body}</div></div>`;
   }
   function noteCard(label, text, icon) {
     if (!str(text)) return "";
@@ -252,6 +256,7 @@ const Dashboard = (() => {
       const SHADES = ["#2e6b3a", "#4c9e55", "#6db86f", "#97cf87", "#c5e59f"];
       const shade = (i) => SHADES[Math.min(i, SHADES.length - 1)];
       const share = (v) => (total > 0 ? (v / total) * 100 : 0);
+      const showYoy = list.some((x) => x.yoy !== null);
       html += `<h2 class="db-h2">Revenue by segment ${approx(seg.source)}
           ${str(seg.fiscal_label) ? `<small class="muted">${esc(str(seg.fiscal_label))}</small>` : ""}
           <span class="db-right">${esc(money(total, cur))}</span></h2>
@@ -261,13 +266,13 @@ const Dashboard = (() => {
             return `<span class="${i >= 3 ? "light" : ""}" style="flex-basis:${p.toFixed(3)}%;background:${shade(i)}">${p >= 12 ? esc(pct(p, { strip: true })) : ""}</span>`;
           }).join("")}
         </div>
-        <div class="db-table">
-          <div class="db-trow head"><span>Segment</span><span>Share</span><span>Revenue</span><span>1-yr</span></div>
+        <div class="db-table${showYoy ? "" : " no-yoy"}">
+          <div class="db-trow head"><span>Segment</span><span>Share</span><span>Revenue</span>${showYoy ? "<span>1-yr</span>" : ""}</div>
           ${list.map((x, i) => `<div class="db-trow">
             <span class="db-segname"><i class="db-swatch" style="background:${shade(i)}"></i>${esc(x.name)}</span>
             <b>${esc(pct(share(x.revenue), { strip: true }))}</b>
             <span>${esc(money(x.revenue, cur))}</span>
-            ${x.yoy === null ? `<span class="muted">${DASH}</span>`
+            ${!showYoy ? "" : x.yoy === null ? `<span class="muted">${DASH}</span>`
               : `<b class="${x.yoy < 0 ? "down" : "up"}">${x.yoy < 0 ? "▼" : "▲"} ${esc(pct(Math.abs(x.yoy), { strip: true }))}</b>`}
           </div>`).join("")}
         </div>`;

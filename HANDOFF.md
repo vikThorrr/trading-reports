@@ -199,7 +199,7 @@ repos).
 - Publish manually: `node publish.mjs` (needs Node 22 + the local passphrase).
 - **Cache busting:** bump `?v=N` on `app.js`/`style.css` in `index.html` +
   `share.html`, and the `CACHE` name in `sw.js`, on every frontend change
-  (currently **v16 / tr-v16**).
+  (currently **v17 / tr-v17**).
 - After editing `listen.sh`, reload it:
   `launchctl kickstart -k gui/$(id -u)/com.victor.tradingagents-listen`.
 

@@ -535,6 +535,7 @@ h1, h2, h3, .ticker, .lock-card h1 { font-family: var(--font-display); }
   padding: 10px 0; border-bottom: 1px solid var(--border);
 }
 .db-trow.head { font-size: 12px; color: var(--muted); border-bottom: 0; padding-bottom: 0; }
+.db-table.no-yoy .db-trow { grid-template-columns: minmax(0, 1fr) 50px 64px; }
 .db-trow > :not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .db-segname { display: flex; line-height: 1.35; }
 
